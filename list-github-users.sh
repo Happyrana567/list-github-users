@@ -1,44 +1,64 @@
 #!/bin/bash
 
-# GitHub API URL
+# GitHub API base URL
 API_URL="https://api.github.com"
 
-# GitHub username and personal access token
-USERNAME=$username
-TOKEN=$token
+# Prompt for GitHub username if not set as env variable
+if [[ -z "$GITHUB_USERNAME" ]]; then
+  read -p "Enter your GitHub username: " GITHUB_USERNAME
+fi
 
-# User and Repository information
-REPO_OWNER=$1
-REPO_NAME=$2
+# Prompt for GitHub Personal Access Token without echoing to screen
+if [[ -z "$GITHUB_TOKEN" ]]; then
+  read -s -p "Enter your GitHub Personal Access Token: " GITHUB_TOKEN
+  echo  # move to new line after input
+fi
 
-# Function to make a GET request to the GitHub API
+# Repository details
+REPO_OWNER="devops-team-happy"
+REPO_NAME="github-scripts-devops"
+
+# Function to make a GET request to GitHub API
 function github_api_get {
     local endpoint="$1"
     local url="${API_URL}/${endpoint}"
 
-    # Send a GET request to the GitHub API with authentication
-    curl -s -u "${USERNAME}:${TOKEN}" "$url"
+    # Use curl to make authenticated request
+    curl -s -u "${GITHUB_USERNAME}:${GITHUB_TOKEN}" "$url"
 }
 
-# Function to list users with read access to the repository
+# Function to list users with read access
 function list_users_with_read_access {
     local endpoint="repos/${REPO_OWNER}/${REPO_NAME}/collaborators"
 
-    # Fetch the list of collaborators on the repository
-    collaborators="$(github_api_get "$endpoint" | jq -r '.[] | select(.permissions.pull == true) | .login')"
+    # Fetch API response
+    local response
+    response=$(github_api_get "$endpoint")
 
-    # Display the list of collaborators with read access
+    # Basic error handling: Check if response is an array (success)
+    if ! echo "$response" | jq -e 'type == "array"' > /dev/null; then
+        echo "❌ Failed to fetch collaborators. Response from GitHub:"
+        echo "$response"
+        return 1
+    fi
+
+    # Extract logins of collaborators with read (pull) access
+    local collaborators
+    collaborators=$(echo "$response" | jq -r '.[] | select(.permissions.pull == true) | .login')
+
+    # Display the result
     if [[ -z "$collaborators" ]]; then
-        echo "No users with read access found for ${REPO_OWNER}/${REPO_NAME}."
+        echo "📭 No users with read access found for ${REPO_OWNER}/${REPO_NAME}."
     else
-        echo "Users with read access to ${REPO_OWNER}/${REPO_NAME}:"
+        echo "✅ Users with read access to ${REPO_OWNER}/${REPO_NAME}:"
         echo "$collaborators"
     fi
 }
 
-# Main script
-
-echo "Listing users with read access to ${REPO_OWNER}/${REPO_NAME}..."
+# -----------------------------
+# Main Execution Starts Here
+# -----------------------------
+echo "🔍 Listing users with read access to ${REPO_OWNER}/${REPO_NAME}..."
 list_users_with_read_access
 
 
